@@ -61,7 +61,7 @@
     try { const raw = localStorage.getItem(KEY); return raw ? validate(JSON.parse(raw)) : initialData(); }
     catch { loadIssue = '저장된 기록을 읽을 수 없어 기본안을 표시했어. 저장 권한과 백업 파일을 확인해줘.'; return initialData(); }
   }
-  let data = load(), editRef = null, dragging = null, undoAction = null;
+  let data = load(), editRef = null, dragging = null, undoAction = null, mobileBoardStatus = "soon";
   let view = location.hash === '#board' ? 'board' : 'calendar';
   const phaseLastWeek = { korea: '2026-11-30', taipei: '2027-03-01' };
   function warn(message) { $('#storage-warning').hidden = false; $('#storage-warning').textContent = message; }
@@ -135,10 +135,12 @@
   }
   function renderBoard() {
     $$('.segmented button').forEach(b => { const on = b.dataset.scope === data.boardScope; b.classList.toggle('is-active', on); b.setAttribute('aria-pressed', on); });
+    const source = selectedTasks(), tabs = $('#board-status-tabs');
+    tabs.innerHTML = Object.entries(STATUS).map(([key, label]) => `<button type="button" role="tab" data-status="${key}" aria-selected="${key === mobileBoardStatus}" class="${key === mobileBoardStatus ? 'is-active' : ''}"><span>${label}</span><strong>${source.filter(t => t.status === key).length}</strong></button>`).join('');
+    $$('button', tabs).forEach(b => b.onclick = () => { mobileBoardStatus = b.dataset.status; renderBoard(); });
     const board = $('#board'); board.replaceChildren();
-    const source = selectedTasks();
     Object.entries(STATUS).forEach(([key, label]) => {
-      const col = document.createElement('section'); col.className = 'board-column'; col.dataset.status = key; col.style.setProperty('--column-color', COLORS[key]);
+      const col = document.createElement('section'); col.className = `board-column ${key === mobileBoardStatus ? 'is-mobile-active' : ''}`; col.dataset.status = key; col.style.setProperty('--column-color', COLORS[key]);
       const cards = source.filter(t => t.status === key);
       col.innerHTML = `<div class="column-head"><h2>${label}</h2><span>${cards.length}</span></div><div class="task-list"></div>`;
       const list = $('.task-list', col);
