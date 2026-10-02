@@ -61,7 +61,7 @@
     try { const raw = localStorage.getItem(KEY); return raw ? validate(JSON.parse(raw)) : initialData(); }
     catch { loadIssue = '저장된 기록을 읽을 수 없어 기본안을 표시했어. 저장 권한과 백업 파일을 확인해줘.'; return initialData(); }
   }
-  let data = load(), editRef = null, dragging = null, undoAction = null, mobileBoardStatus = "soon";
+  let data = load(), editRef = null, dragging = null, undoAction = null, mobileBoardStatus = "soon", mobileCalendarMode = 'day';
   let view = location.hash === '#board' ? 'board' : 'calendar';
   const phaseLastWeek = { korea: '2026-11-30', taipei: '2027-03-01' };
   function warn(message) { $('#storage-warning').hidden = false; $('#storage-warning').textContent = message; }
@@ -106,6 +106,43 @@
     $('#week-progress').textContent = `완료 ${items.filter(x => x.status === 'done').length} / ${items.length}`;
     $('#season-strip').innerHTML = info.season.map(x => `<article class="season-card"><span>${esc(x[0])}</span><h3>${esc(x[1])}</h3><p>${esc(x[2])}</p></article>`).join('');
   }
+  function renderWeeklyAgenda(tasks) {
+    const agenda = $('#weekly-agenda');
+    agenda.replaceChildren();
+    DAYS.forEach((day, index) => {
+      const section = document.createElement('section');
+      section.className = 'agenda-day';
+      const valid = validDay(data.weekKey, day);
+      const dayTasks = valid ? tasks.filter(task => task.day === day).sort((a, b) => PARTS.indexOf(a.part) - PARTS.indexOf(b.part)) : [];
+      section.innerHTML = `<header class="agenda-day-head"><div><strong>${day}</strong><span>${EN[index]} · ${dateShort(dayDate(data.weekKey, index))}</span></div><span>${valid ? `${dayTasks.filter(task => task.status === 'done').length}/${dayTasks.length}` : '범위 밖'}</span></header><div class="agenda-items"></div>`;
+      const list = $('.agenda-items', section);
+      dayTasks.forEach(item => {
+        const card = document.createElement('article');
+        card.className = `agenda-item kind-${item.kind} ${item.status === 'done' ? 'is-done' : ''}`;
+        card.dataset.id = item.id;
+        card.innerHTML = `<button type="button" class="agenda-edit" aria-label="${day} ${item.part} ${esc(item.title)} 수정"><span class="agenda-part">${esc(item.part)} · ${esc(item.time || KIND[item.kind])}</span><strong>${esc(item.title)}</strong><span class="agenda-note">${esc(item.note)}</span></button><button type="button" class="done-toggle agenda-done" aria-pressed="${item.status === 'done'}" aria-label="${esc(item.title)} ${item.status === 'done' ? '완료 취소' : '완료 표시'}"></button>`;
+        $('.agenda-edit', card).onclick = () => openEditor(item, 'week');
+        $('.agenda-done', card).onclick = () => changeStatus(item, 'week', item.status === 'done' ? 'soon' : 'done');
+        list.append(card);
+      });
+      if (valid) {
+        const add = document.createElement('button');
+        add.type = 'button'; add.className = 'agenda-add'; add.textContent = dayTasks.length ? '+ 이 날 일정 추가' : '+ 비어 있는 날, 일정 추가';
+        add.onclick = () => openEditor(null, 'week', day, '오전');
+        list.append(add);
+      }
+      agenda.append(section);
+    });
+  }
+  function setMobileCalendarMode(mode) {
+    mobileCalendarMode = mode;
+    $$('[data-calendar-mode]').forEach(button => {
+      const on = button.dataset.calendarMode === mode;
+      button.classList.toggle('is-active', on); button.setAttribute('aria-pressed', on);
+    });
+    $('#calendar-view').classList.toggle('is-weekly-mobile', mode === 'week');
+    $('#weekly-agenda').hidden = mode !== 'week';
+  }
   function renderCalendar() {
     const tasks = data.weeks[data.weekKey], grid = $('#week-grid');
     if (!validDay(data.weekKey, data.day)) data.day = '월';
@@ -132,6 +169,8 @@
         grid.append(slot);
       });
     });
+    renderWeeklyAgenda(tasks);
+    setMobileCalendarMode(mobileCalendarMode);
   }
   function renderBoard() {
     $$('.segmented button').forEach(b => { const on = b.dataset.scope === data.boardScope; b.classList.toggle('is-active', on); b.setAttribute('aria-pressed', on); });
@@ -212,6 +251,7 @@
     finally { $('#import-file').value = ''; }
   }
   $$('.nav-item').forEach(b => b.onclick = () => setView(b.dataset.view));
+  $$('[data-calendar-mode]').forEach(b => b.onclick = () => setMobileCalendarMode(b.dataset.calendarMode));
   $('.brand').onclick = e => { e.preventDefault(); setView('calendar'); };
   $$('.phase-btn').forEach(b => b.onclick = () => { data.phase = b.dataset.phase; data.weekKey = phaseLastWeek[data.phase]; persist(); render(); });
   $('#week-select').onchange = e => { data.weekKey = e.target.value; persist(); render(); };
